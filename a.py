@@ -1,20 +1,16 @@
-import dash
-import numpy as np
+import  numpy as np
 import pandas as pd
 import plotly.offline as pyo
 import plotly.graph_objs as go
-import plotly.express as px
-import dash_core_components as dcc
-import dash_html_components as html
-from dash.dependencies import Input,Output,State
-import base64
 import dash_daq as daq
 import dash_player
-import json
+import dash
+import dash_html_components as html
+import dash_core_components as dcc
+from dash.dependencies import Input, Output, State
 
-## encode image to be able to show on browser
 def encode_image(image_file):
-    encoded = base64.b64encode(open(image_file, 'rb').read())
+    encoded = base64.b64encode(open(image_file,'rb').read())
     return 'data:image/png;base64,{}'.format(encoded.decode())
 # reading xlsx file
 df=pd.read_excel('touch_downs_4114.xlsx')
@@ -50,88 +46,180 @@ x=np.array(x1)
 y=np.array(y1)
 z=np.array(z1)
 length=len(x1)
+##print(index)
 #video getFilePath
 video_path='static/IMG_4114.mp4'
 
+fig=go.Figure(
+    data=[go.Scatter(
+                        x=x,
+                        y=y,
+                        name='Moving Line',
+                        visible=True,
+                        line=dict(color='blue')
+    ),go.Scatter(
+                        x=x,
+                        y=y,
+                        name='First Plot',
+                        visible=True,
+                        line=dict(color='#bf00ff')
+    )],
+    layout=go.Layout(
+        xaxis=dict(range=[x_min-100,x_max+100],autorange=False,tickwidth=2,title='Distance From Start'),
+        yaxis=dict(range=[y_min-20,y_max+20],autorange=False,title='Stride Frequency'),
+        title='My-Graph'
+    ),
+)
 
-#styling for guage
+fig1 = go.Figure(go.Indicator(
+    mode = "gauge+number+delta",
+    value = y[0],
+    domain = {'x': [0, 1], 'y': [0, 1]},
+    title = {'text': "Stride Frequency"}))
+fig2 = go.Figure(go.Indicator(
+    mode = "gauge+number+delta",
+    value = z[0],
+    domain = {'x': [0, 1], 'y': [0, 1]},
+    title = {'text': "Stride Duration"}))
 
+app = dash.Dash(__name__)
 
-app = dash.Dash()
-
-app.layout = html.Center(html.Div([
-            dcc.Graph(id='my-graph',
-                    style={'display':'inline-block','width':'50%','height':'10%'}),
-            html.Div([daq.Gauge(
-                id='my-Gauge',
-                showCurrentValue=True,
-                value=y.min(),
-                label='Stride Frequecy',
-                color={"gradient":True,"ranges":{"green":[150,200],"yellow":[200,250],"red":[250,300]}},
-                max=300,
-                min=150,
-            )],style={'display':'inline-block'}),
-            html.Div([daq.Gauge(
-                id='my-Gauge1',
-                showCurrentValue=True,
-                units="ms",
-                value=z[0],
-                label='Stride Duration',
-                color={"gradient":True,"ranges":{"green":[150,200],"yellow":[200,250],"red":[250,300]}},
-                max=300,
-                min=150,
-            )],style={'display':'inline-block'})
-            ,
-            html.Center([
-                dash_player.DashPlayer(
-                    id='video-player',
-                    url=video_path,
-                    controls=True
+app.layout = html.Div([
+                dcc.Graph(id='my-graph',figure=fig,
+                        style={'display':'inline-block','width':'50%','height':'10%'}),
+                dcc.Interval(id='interval-component',
+                            interval=3450/(length+1),
+                            n_intervals=0,
+                            max_intervals=-1,
+                            disabled=True),
+                html.Div([
+                    dcc.Graph(id='my-Gauge',figure=fig1)
+                ]
+                ,style={'display':'inline-block'}),
+                html.Div([
+                    dcc.Graph(id='my-Gauge1',figure=fig2)
+                ]
+                ,style={'display':'inline-block'}),
+                html.Div(
+                    style={
+                        'width': '40%',
+                        'float': 'left',
+                        'margin': '0% 5% 1% 5%'
+                    },
+                    children=[
+                        dash_player.DashPlayer(
+                            id='video-player',
+                            url=video_path,
+                            controls=False,
+                            width='100%',
+                            loop=True
+                        )
+                    ]
                 ),
-                ])
-]))
+
+                html.Div(
+                    style={
+                        'width': '30%',
+                        'float': 'left'
+                    },
+                    children=[
+                        dcc.Checklist(
+                            id='radio-bool-props',
+                            options=[{'label':'Play','value':'playing'},
+                                    {'label':'mute','value':'muted'}
+                            ],
+                            value=['controls']
+                        ),
+                    ]
+                ),
+            ])
+
+@app.callback(Output('video-player', 'playing'),
+              [Input('radio-bool-props', 'value')])
+def update_prop_playing(values):
+    return 'playing' in values
+
+@app.callback(Output('video-player', 'muted'),
+              [Input('radio-bool-props', 'value')])
+def update_prop_muted(values):
+    return 'muted' in values
 
 @app.callback(Output('my-graph','figure'),
-                [Input('video-player','currentTime'),
-                Input('video-player','secondsLoaded')]
-                )
-def graph_ouput(currentTime,secondsLoaded):
-    x_range=(x.max()-x.min())/secondsLoaded
-    x_start=x.min()
-    dist=x_start+currentTime*x_range
-    figure={
-    'data':[go.Scatter(x=x,y=y,mode='lines')],
-    'layout':go.Layout(title='Stride Frequency Vs Distance Travelled',
-                        hovermode='closest',
-                        xaxis={'title':'Distance from Start'},
-                        yaxis={'title':'Stride Frequency'})}
-    fig=go.Figure(data=figure['data'],layout=figure['layout'])
-    fig.add_vline(x=dist,line_width=2,line_color='green')
+            [Input('interval-component','n_intervals')])
+def outwsr(n_intervals):
+    n_intervals=n_intervals%length
+    fig=go.Figure(
+        data=[go.Scatter(
+                            x=x,
+                            y=y,
+                            name='Moving Line',
+                            visible=True,
+                            line=dict(color='blue')
+        ),go.Scatter(
+                            x=x,
+                            y=y,
+                            name='First Plot',
+                            visible=True,
+                            line=dict(color='#bf00ff')
+        )],
+        layout=go.Layout(
+            xaxis=dict(range=[x_min-100,x_max+100],autorange=False,tickwidth=2,title='Distance From Start'),
+            yaxis=dict(range=[y_min-20,y_max+20],autorange=False,title='Stride Frequency'),
+            title='My-Graph'
+        ),
+    )
+    if(n_intervals>0 and n_intervals<=length-1):
+        fig=go.Figure(
+            data=[go.Scatter(
+                                x=[x[n_intervals],x[n_intervals]],
+                                y=[y_min-20,y_max+20],
+                                name='Moving Line',
+                                visible=True,
+                                line=dict(color='blue')
+            ),go.Scatter(
+                                x=x,
+                                y=y,
+                                name='First Plot',
+                                visible=True,
+                                line=dict(color='#bf00ff')
+            )],
+            layout=go.Layout(
+                xaxis=dict(range=[x_min-100,x_max+100],autorange=False,tickwidth=2,title='Distance From Start'),
+                yaxis=dict(range=[y_min-20,y_max+20],autorange=False,title='Stride Frequency'),
+                title='My-Graph'
+            ),
+        )
     return fig
 
-
-
-@app.callback(Output('my-Gauge','value'),
-                [Input('video-player','currentTime'),
-                Input('video-player','secondsLoaded')]
+@app.callback([Output('my-Gauge','figure'),
+                Output('my-Gauge1','figure')],
+                [Input('interval-component','n_intervals')]
                 )
-def output_value(currentTime,secondsLoaded):
-    x_range=(x.max()-x.min())/secondsLoaded
-    x_start=x.min()
-    dist=x_start+currentTime*x_range
-    index = (np.abs(x-dist)).argmin()
-    return y[index]
+def output_value(n_intervals):
+    index1=0
+    n_intervals=n_intervals%length
+    if(n_intervals>=0 and n_intervals<=length-1):
+        index1=n_intervals
+    fig1 = go.Figure(go.Indicator(
+        mode = "gauge+number+delta",
+        value = y[index1],
+        domain = {'x': [0, 1], 'y': [0, 1]},
+        title = {'text': "Stride Frequency"}))
+    fig2 = go.Figure(go.Indicator(
+        mode = "gauge+number+delta",
+        value = z[index1],
+        domain = {'x': [0, 1], 'y': [0, 1]},
+        title = {'text': "Stride Duration"}))
+    return (fig1,fig2)
 
-@app.callback(Output('my-Gauge1','value'),
-                [Input('video-player','currentTime'),
-                Input('video-player','secondsLoaded')]
-                )
-def output_value(currentTime,secondsLoaded):
-    x_range=(x.max()-x.min())/secondsLoaded
-    x_start=x.min()
-    dist=x_start+currentTime*x_range
-    index = (np.abs(x-dist)).argmin()
-    return z[index]
+@app.callback(Output('interval-component','disabled'),
+                    [Input('radio-bool-props', 'value')])
+def start_stop_update(value):
+    if 'playing' in value:
+        return False
+    else:
+        return True
+
 
 if __name__ == '__main__':
     app.run_server(debug=False)
