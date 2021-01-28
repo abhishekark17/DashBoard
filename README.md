@@ -3,6 +3,8 @@
 
 `pip install dash_daq`
 
+`pip install movie.py`
+
 `python b.py`
 **OR**
 `python c.py`
