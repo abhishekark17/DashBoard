@@ -52,9 +52,6 @@ total_gauge_value=len(first_gauge)
 one_gauge_time=video_duration/total_gauge_value
 ##print(index)
 
-#video getFilePath
-video_path='static/video.mp4'
-video_duration=(moviepy.editor.VideoFileClip(video_path).duration)*1000
 
 one_frame_time=video_duration/total_frames
 
@@ -161,10 +158,14 @@ def start_stop_update(value):
         return True
 
 @app.callback(Output('my-graph','figure'),
-            [Input('interval-component','n_intervals')])
-def outwsr(n_intervals):
-    n_intervals=n_intervals%total_frames
-    fig['data'][0]['x']=[n_intervals,n_intervals]
+            [Input('video-player','currentTime')])
+def outwsr(currentTime):
+    index1=0
+    if(currentTime is not None):
+        index1=int((currentTime*1000)/one_frame_time)
+    if(index1>=total_frames):
+        index1=total_frames
+    fig['data'][0]['x']=[index1,index1]
     fig['data'][0]['y']=[y_graph_min-20,y_graph_max+20]
     return fig
 
