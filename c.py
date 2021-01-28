@@ -113,7 +113,7 @@ app.layout = html.Div([
                         dash_player.DashPlayer(
                             id='video-player',
                             url=video_path,
-                            controls=False,
+                            controls=True,
                             width='100%',
                             loop=True,
                         )
@@ -138,7 +138,7 @@ app.layout = html.Div([
                     ]
                 ),
             ])
-
+'''
 @app.callback(Output('video-player', 'playing'),
               [Input('radio-bool-props', 'value')])
 def update_prop_playing(values):
@@ -156,7 +156,7 @@ def start_stop_update(value):
         return False
     else:
         return True
-
+'''
 @app.callback(Output('my-graph','figure'),
             [Input('video-player','currentTime')])
 def outwsr(currentTime):
