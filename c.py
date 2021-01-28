@@ -8,65 +8,71 @@ import dash
 import dash_html_components as html
 import dash_core_components as dcc
 from dash.dependencies import Input, Output, State
+import moviepy.editor
 
 def encode_image(image_file):
     encoded = base64.b64encode(open(image_file,'rb').read())
     return 'data:image/png;base64,{}'.format(encoded.decode())
-# reading xlsx file
-df=pd.read_excel('touch_downs_4114.xlsx')
-df=df.dropna()
-x_=df['x']
-x_min=x_.min()
-x_max=x_.max()
-x_=x_.tolist()
-x1=[]
-index=df.index
-y_=df['stride frequency']
-y_min=y_.min()
-y_max=y_.max()
-y_=y_.tolist()
-y1=[]
-z_=df['stride duration (secs)']*1000
-z_min=z_.min()
-z_max=z_.max()
-z_=z_.tolist()
-z1=[]
 
-#creating extra data
-for i in range(0,len(x_)-1):
-    a=np.linspace(x_[i],x_[i+1],5).tolist()
-    x1+=a
-for i in range(0,len(y_)-1):
-    b=np.linspace(y_[i],y_[i+1],5).tolist()
-    y1+=b
-for i in range(0,len(z_)-1):
-    c=np.linspace(z_[i],z_[i+1],5).tolist()
-    z1+=c
-x=np.array(x1)
-y=np.array(y1)
-z=np.array(z1)
-length=len(x1)
-##print(index)
 #video getFilePath
-video_path='static/IMG_4114.mp4'
+video_path='static/video.mp4'
+video_duration=(moviepy.editor.VideoFileClip(video_path).duration)*1000
+# reading xlsx file
+df_graph=pd.read_csv('id-1-pose-26.csv')
+frames=df_graph['Frame']
+y_graph=df_graph['LAnkle_Y']
+min_frames=frames.min()
+max_frames=frames.max()
+y_graph_min=y_graph.min()
+y_graph_max=y_graph.max()
+total_frames=len(frames)
+
+#For gauges
+df_gauge=pd.read_csv('touch_downs_4114.csv')
+df_gauge=df_gauge.dropna()
+first_gauge=df_gauge['stride frequency']
+second_gauge=df_gauge['stride duration (secs)']*1000
+first_gauge=first_gauge.tolist()
+second_gauge=second_gauge.tolist()
+#Creating extra data for smoothness of gauges
+linspace_value=int(total_frames/(len(first_gauge)-1))
+##extra_linspace_value=total_frames % (len(first_gauge)-1)
+a=[]
+b=[]
+for i in range(len(first_gauge)-1):
+    to_be_added=np.linspace(first_gauge[i],first_gauge[i+1],linspace_value).tolist()
+    a+=to_be_added
+for i in range(len(second_gauge)-1):
+    to_be_added=np.linspace(second_gauge[i],second_gauge[i+1],linspace_value).tolist()
+    b+=to_be_added
+first_gauge=np.array(a)
+second_gauge=np.array(b)
+
+total_gauge_value=len(first_gauge)
+one_gauge_time=video_duration/total_gauge_value
+##print(index)
+
+#video getFilePath
+video_path='static/video.mp4'
+video_duration=(moviepy.editor.VideoFileClip(video_path).duration)*1000
+
+one_frame_time=video_duration/total_frames
 
 fig=go.Figure(
-    data=[go.Scatter(
-                        x=x,
-                        y=y,
-                        name='Moving Line',
+    data=[go.Scattergl(
+                        x=frames,
+                        y=y_graph,
                         visible=True,
                         line=dict(color='blue')
-    ),go.Scatter(
-                        x=x,
-                        y=y,
-                        name='First Plot',
+    ),go.Scattergl(
+                        x=frames,
+                        y=y_graph,
                         visible=True,
                         line=dict(color='#bf00ff')
     )],
     layout=go.Layout(
-        xaxis=dict(range=[x_min-100,x_max+100],autorange=False,tickwidth=2,title='Distance From Start'),
-        yaxis=dict(range=[y_min-20,y_max+20],autorange=False,title='Stride Frequency'),
+        xaxis=dict(range=[min_frames-100,max_frames+100],autorange=False,title='Frame Number'),
+        yaxis=dict(range=[y_graph_min-20,y_graph_max+20],autorange=False,title='Left Ankle'),
         title='My-Graph'
     ),
 )
@@ -77,14 +83,14 @@ app.layout = html.Div([
                 dcc.Graph(id='my-graph',figure=fig,
                         style={'display':'inline-block','width':'50%','height':'10%'}),
                 dcc.Interval(id='interval-component',
-                            interval=3450/(length+1),
+                            interval=one_frame_time,
                             n_intervals=0,
                             max_intervals=-1,
                             disabled=True),
                 html.Div([daq.Gauge(
                     id='my-Gauge',
                     showCurrentValue=True,
-                    value=y[0],
+                    value=first_gauge[0],
                     label='Stride Frequecy',
                     color={"gradient":True,"ranges":{"green":[150,200],"yellow":[200,250],"red":[250,300]}},
                     max=300,
@@ -94,7 +100,7 @@ app.layout = html.Div([
                     id='my-Gauge1',
                     showCurrentValue=True,
                     units='ms',
-                    value=z[0],
+                    value=second_gauge[0],
                     label='Stride Duration',
                     color={"gradient":True,"ranges":{"green":[150,200],"yellow":[200,250],"red":[250,300]}},
                     max=300,
@@ -112,7 +118,7 @@ app.layout = html.Div([
                             url=video_path,
                             controls=False,
                             width='100%',
-                            loop=True
+                            loop=True,
                         )
                     ]
                 ),
@@ -120,7 +126,8 @@ app.layout = html.Div([
                 html.Div(
                     style={
                         'width': '30%',
-                        'float': 'left'
+                        'float': 'left',
+                        'color':'red'
                     },
                     children=[
                         dcc.Checklist(
@@ -128,7 +135,8 @@ app.layout = html.Div([
                             options=[{'label':'Play','value':'playing'},
                                     {'label':'mute','value':'muted'}
                             ],
-                            value=['controls']
+                            value=['controls'],
+                            labelStyle={'size':'100px','display':'inline-block'}
                         ),
                     ]
                 ),
@@ -144,64 +152,6 @@ def update_prop_playing(values):
 def update_prop_muted(values):
     return 'muted' in values
 
-@app.callback(Output('my-graph','figure'),
-            [Input('interval-component','n_intervals')])
-def outwsr(n_intervals):
-    n_intervals=n_intervals%length
-    fig=go.Figure(
-        data=[go.Scatter(
-                            x=x,
-                            y=y,
-                            name='Moving Line',
-                            visible=True,
-                            line=dict(color='blue')
-        ),go.Scatter(
-                            x=x,
-                            y=y,
-                            name='First Plot',
-                            visible=True,
-                            line=dict(color='#bf00ff')
-        )],
-        layout=go.Layout(
-            xaxis=dict(range=[x_min-100,x_max+100],autorange=False,tickwidth=2,title='Distance From Start'),
-            yaxis=dict(range=[y_min-20,y_max+20],autorange=False,title='Stride Frequency'),
-            title='My-Graph'
-        ),
-    )
-    if(n_intervals>0 and n_intervals<=length-1):
-        fig=go.Figure(
-            data=[go.Scatter(
-                                x=[x[n_intervals],x[n_intervals]],
-                                y=[y_min-20,y_max+20],
-                                name='Moving Line',
-                                visible=True,
-                                line=dict(color='blue')
-            ),go.Scatter(
-                                x=x,
-                                y=y,
-                                name='First Plot',
-                                visible=True,
-                                line=dict(color='#bf00ff')
-            )],
-            layout=go.Layout(
-                xaxis=dict(range=[x_min-100,x_max+100],autorange=False,tickwidth=2,title='Distance From Start'),
-                yaxis=dict(range=[y_min-20,y_max+20],autorange=False,title='Stride Frequency'),
-                title='My-Graph'
-            ),
-        )
-    return fig
-
-@app.callback([Output('my-Gauge','value'),
-                Output('my-Gauge1','value')],
-                [Input('interval-component','n_intervals')]
-                )
-def output_value(n_intervals):
-    index1=0
-    n_intervals=n_intervals%length
-    if(n_intervals>=0 and n_intervals<=length-1):
-        index1=n_intervals
-    return (y[index1],z[index1])
-
 @app.callback(Output('interval-component','disabled'),
                     [Input('radio-bool-props', 'value')])
 def start_stop_update(value):
@@ -209,7 +159,26 @@ def start_stop_update(value):
         return False
     else:
         return True
-
+'''
+@app.callback(Output('my-graph','figure'),
+            [Input('interval-component','n_intervals')])
+def outwsr(n_intervals):
+    n_intervals=n_intervals%total_frames
+    fig['data'][0]['x']=[n_intervals,n_intervals]
+    fig['data'][0]['y']=[y_graph_min-20,y_graph_max+20]
+    return fig
+'''
+@app.callback([Output('my-Gauge','value'),
+                Output('my-Gauge1','value')],
+                [Input('video-player','currentTime')]
+                )
+def output_value(currentTime):
+    index1=0
+    if(currentTime is not None):
+        index1=int((currentTime*1000)/one_gauge_time)
+    if (index1>=total_gauge_value-1):
+        index1=total_gauge_value-1
+    return (first_gauge[index1],second_gauge[index1])
 
 if __name__ == '__main__':
-    app.run_server(debug=False)
+    app.run_server(debug=False,threaded=True)
