@@ -159,7 +159,7 @@ def start_stop_update(value):
         return False
     else:
         return True
-'''
+
 @app.callback(Output('my-graph','figure'),
             [Input('interval-component','n_intervals')])
 def outwsr(n_intervals):
@@ -167,7 +167,7 @@ def outwsr(n_intervals):
     fig['data'][0]['x']=[n_intervals,n_intervals]
     fig['data'][0]['y']=[y_graph_min-20,y_graph_max+20]
     return fig
-'''
+
 @app.callback([Output('my-Gauge','value'),
                 Output('my-Gauge1','value')],
                 [Input('video-player','currentTime')]
