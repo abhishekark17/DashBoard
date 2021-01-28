@@ -8,7 +8,7 @@ import dash
 import dash_html_components as html
 import dash_core_components as dcc
 from dash.dependencies import Input, Output, State
-import moviepy.editor
+import cv2
 
 def encode_image(image_file):
     encoded = base64.b64encode(open(image_file,'rb').read())
@@ -16,7 +16,8 @@ def encode_image(image_file):
 
 #video getFilePath
 video_path='static/video.mp4'
-video_duration=(moviepy.editor.VideoFileClip(video_path).duration)*1000
+vid=cv2.VideoCapture(video_path)
+fps = int(vid.get(cv2.CAP_PROP_FPS))
 # reading xlsx file
 df_graph=pd.read_csv('id-1-pose-26.csv')
 frames=df_graph['Frame']
@@ -25,7 +26,7 @@ min_frames=frames.min()
 max_frames=frames.max()
 y_graph_min=y_graph.min()
 y_graph_max=y_graph.max()
-total_frames=len(frames)
+total_frames = int(vid.get(cv2.CAP_PROP_FRAME_COUNT))
 
 #For gauges
 df_gauge=pd.read_csv('touch_downs_4114.csv')
@@ -49,28 +50,31 @@ first_gauge=np.array(a)
 second_gauge=np.array(b)
 
 total_gauge_value=len(first_gauge)
-one_gauge_time=video_duration/total_gauge_value
 ##print(index)
-
-
-one_frame_time=video_duration/total_frames
 
 fig=go.Figure(
     data=[go.Scattergl(
                         x=frames,
                         y=y_graph,
+                        name='Moving Plot',
                         visible=True,
                         line=dict(color='blue')
     ),go.Scattergl(
                         x=frames,
                         y=y_graph,
+                        name='Original Plot',
                         visible=True,
                         line=dict(color='#bf00ff')
     )],
     layout=go.Layout(
         xaxis=dict(range=[min_frames-100,max_frames+100],autorange=False,title='Frame Number'),
         yaxis=dict(range=[y_graph_min-20,y_graph_max+20],autorange=False,title='Left Ankle'),
-        title='My-Graph'
+        title={
+        'text': "My Graph",
+        'y':0.9,
+        'x':0.4,
+        'xanchor': 'center',
+        'yanchor': 'top'}
     ),
 )
 
@@ -79,11 +83,6 @@ app = dash.Dash(__name__)
 app.layout = html.Div([
                 dcc.Graph(id='my-graph',figure=fig,
                         style={'display':'inline-block','width':'50%','height':'10%'}),
-                dcc.Interval(id='interval-component',
-                            interval=one_frame_time,
-                            n_intervals=0,
-                            max_intervals=-1,
-                            disabled=True),
                 html.Div([daq.Gauge(
                     id='my-Gauge',
                     showCurrentValue=True,
@@ -115,7 +114,7 @@ app.layout = html.Div([
                             url=video_path,
                             controls=True,
                             width='100%',
-                            loop=True,
+                            loop=False,
                         )
                     ]
                 ),
@@ -129,40 +128,27 @@ app.layout = html.Div([
                     children=[
                         dcc.Checklist(
                             id='radio-bool-props',
-                            options=[{'label':'Play','value':'playing'},
-                                    {'label':'mute','value':'muted'}
+                            options=[
                             ],
                             value=['controls'],
-                            labelStyle={'size':'100px','display':'inline-block'}
+                            labelStyle={'size':'0px','display':'inline-block'}
                         ),
                     ]
                 ),
-            ])
-'''
+        ])
+
+#I dont know what it does but without it code doesnot work
 @app.callback(Output('video-player', 'playing'),
               [Input('radio-bool-props', 'value')])
 def update_prop_playing(values):
     return 'playing' in values
 
-@app.callback(Output('video-player', 'muted'),
-              [Input('radio-bool-props', 'value')])
-def update_prop_muted(values):
-    return 'muted' in values
-
-@app.callback(Output('interval-component','disabled'),
-                    [Input('radio-bool-props', 'value')])
-def start_stop_update(value):
-    if 'playing' in value:
-        return False
-    else:
-        return True
-'''
 @app.callback(Output('my-graph','figure'),
             [Input('video-player','currentTime')])
 def outwsr(currentTime):
     index1=0
     if(currentTime is not None):
-        index1=int((currentTime*1000)/one_frame_time)
+        index1=int((currentTime*fps))
     if(index1>=total_frames):
         index1=total_frames
     fig['data'][0]['x']=[index1,index1]
@@ -176,7 +162,7 @@ def outwsr(currentTime):
 def output_value(currentTime):
     index1=0
     if(currentTime is not None):
-        index1=int((currentTime*1000)/one_gauge_time)
+        index1=int((currentTime*fps))
     if (index1>=total_gauge_value-1):
         index1=total_gauge_value-1
     return (first_gauge[index1],second_gauge[index1])
