@@ -3,8 +3,6 @@
 
 `pip install dash_daq`
 
-`pip install moviepy`
+`pip install opencv-python`
 
-`python b.py`
-**OR**
 `python c.py`
