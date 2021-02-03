@@ -14,6 +14,7 @@ import argparse
 import os
 from tqdm import tqdm
 import glob
+import time
 
 
 def encode_image(image_file):
@@ -24,10 +25,13 @@ def create_dash(video_path,csv_dir,id_another_csv,bb_video_path):
 #video getFilePath
     vid=cv2.VideoCapture(video_path)
     fps = int(vid.get(cv2.CAP_PROP_FPS))
+
+
     # reading xlsx file
     df_graph=pd.read_csv(csv_dir)
     frames=df_graph['Frame']
     y_graph=df_graph['LAnkle_Y']
+    columns=df_graph.columns
     min_frames=frames.min()
     max_frames=frames.max()
     range_frame=int((max_frames-min_frames)/10)
@@ -36,7 +40,7 @@ def create_dash(video_path,csv_dir,id_another_csv,bb_video_path):
     y_graph_max=y_graph.max()
     y_range=int((y_graph_max-y_graph_min)/10)
     total_frames = int(vid.get(cv2.CAP_PROP_FRAME_COUNT))
-
+    video_duration=total_frames/fps
     #For gauges
     df_gauge=pd.read_csv(id_another_csv)
     df_gauge=df_gauge.dropna()
@@ -90,8 +94,35 @@ def create_dash(video_path,csv_dir,id_another_csv,bb_video_path):
     app = dash.Dash(__name__)
 
     app.layout = html.Div([
+                    html.Div([
+                    dcc.Dropdown(
+                        id='dropdown-menu',
+                        options=[{
+                            'label':i,'value':str(i)
+                        } for i in columns],
+                        value='LAnkle_Y'
+                    )],style={'display':'block','width':'40%'})
+                    ,
                     dcc.Graph(id='my-graph',figure=fig,
                             style={'display':'inline-block','width':'50%','height':'10%'}),
+                    html.Div(
+                        style={
+                            'width': '20%',
+                            'margin': '0% 0% 0% 0%',
+                            'display':'inline-block',
+                            'position':'relative'
+                        },
+                        children=[
+                            dash_player.DashPlayer(
+                                id='bounding_box',
+                                url=bb_video_path,
+                                controls=False,
+                                width='100%',
+                                loop=False,
+                                muted=True
+                            )
+                        ]
+                    ),
                     html.Div([daq.Gauge(
                         id='my-Gauge',
                         showCurrentValue=True,
@@ -100,7 +131,7 @@ def create_dash(video_path,csv_dir,id_another_csv,bb_video_path):
                         color={"gradient":True,"ranges":{"green":[150,200],"yellow":[200,250],"red":[250,300]}},
                         max=300,
                         min=150,
-                    )],style={'display':'inline-block'}),
+                    )],style={'display':'inline-block','width':'15%','position':'relative'}),
                     html.Div([daq.Gauge(
                         id='my-Gauge1',
                         showCurrentValue=True,
@@ -110,7 +141,7 @@ def create_dash(video_path,csv_dir,id_another_csv,bb_video_path):
                         color={"gradient":True,"ranges":{"green":[150,200],"yellow":[200,250],"red":[250,300]}},
                         max=300,
                         min=150,
-                    )],style={'display':'inline-block'}),
+                    )],style={'display':'inline-block','width':'15%','position':'relative'}),
                     html.Div(
                         style={
                             'width': '40%',
@@ -123,26 +154,11 @@ def create_dash(video_path,csv_dir,id_another_csv,bb_video_path):
                                 url=video_path,
                                 controls=False,
                                 width='100%',
-                                loop=True,
+                                loop=False,
                             )
                         ]
                     ),
-                    html.Div(
-                        style={
-                            'width': '40%',
-                            'float': 'left',
-                            'margin': '0% 5% 1% 5%'
-                        },
-                        children=[
-                            dash_player.DashPlayer(
-                                id='bounding_box',
-                                url=bb_video_path,
-                                controls=False,
-                                width='50%',
-                                loop=True,
-                            )
-                        ]
-                    ),
+
 
                     html.Div(
                         style={
@@ -161,7 +177,17 @@ def create_dash(video_path,csv_dir,id_another_csv,bb_video_path):
                             ),
                         ]
                     ),
-            ])
+                    html.Div([
+                        dcc.Slider(
+                            id='slider',
+                            min=0,
+                            max=video_duration*1000,
+                            step=5,
+                            updatemode='drag',
+                            value=0
+                        ),
+                    ],style={'position':'relative','display':'inline-block','width':'40%','padding':'2% 2% 2% 2%'})
+            ],style={'position':'relative'})
 
     #I dont know what it does but without it code doesnot work
     @app.callback([Output('video-player', 'playing'),
@@ -169,15 +195,45 @@ def create_dash(video_path,csv_dir,id_another_csv,bb_video_path):
                   [Input('radio-bool-props', 'value')])
     def update_prop_playing(values):
         return ('playing' in values,'playing' in values)
-    @app.callback(Output('bounding_box', 'currentTime'),
-                  [Input('video-player', 'currentTime')])
-    def update_prop_play(values):
-        return values
-
 
     @app.callback(Output('my-graph','figure'),
-                [Input('video-player','currentTime')])
-    def outwsr(currentTime):
+                [Input('video-player','currentTime'),
+                Input('dropdown-menu','value')])
+    def outwsr(currentTime,value):
+        global fig
+        global y_graph
+        global y_graph_max
+        global y_graph_min
+        global y_range
+        y_graph=df_graph[value]
+        y_graph_min=y_graph.min()
+        y_graph_max=y_graph.max()
+        y_range=int((y_graph_max-y_graph_min)/10)
+        fig=go.Figure(
+            data=[go.Scattergl(
+                                x=frames,
+                                y=y_graph,
+                                name='Moving Plot',
+                                visible=True,
+                                line=dict(color='blue')
+            ),go.Scattergl(
+                                x=frames,
+                                y=y_graph,
+                                name='Original Plot',
+                                visible=True,
+                                line=dict(color='#bf00ff')
+            )],
+            layout=go.Layout(
+                xaxis=dict(range=[min_frames-range_frame,max_frames+range_frame],autorange=False,title='Frame Number'),
+                yaxis=dict(range=[y_graph_min-y_range,y_graph_max+y_range],autorange=False,title=value),
+                title={
+                'text': "My Graph",
+                'y':0.9,
+                'x':0.4,
+                'xanchor': 'center',
+                'yanchor': 'top'}
+            ),
+        )
         index1=0
         if(currentTime is not None):
             index1=int((currentTime*fps))
@@ -199,6 +255,11 @@ def create_dash(video_path,csv_dir,id_another_csv,bb_video_path):
             index1=total_gauge_value-1
         return (first_gauge[index1],second_gauge[index1])
     return app
+
+    @app.callback(Output('video-player', 'seekTo'),
+              [Input('slider', 'value')])
+    def set_seekTo(value):
+        return value
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -230,4 +291,4 @@ if __name__ == '__main__':
     #print(out_dir)
     #print(outputFile)
     app=create_dash(video_path,csv_dir,id_another_csv,outputFile)
-    app.run_server(debug=False,threaded=True)
+    app.run_server(debug=True,threaded=True)
