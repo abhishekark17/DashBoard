@@ -1,13 +1,7 @@
-# dash_project
-`pip install dash_player`
+# Dashboard
+## Requirements
+Install all the prerequisites given in reqirement.txt
 
-`pip install dash_daq`
-
-`pip install opencv-python`
-
-`pip install argparse`
-
+## How to Run
 `python c.py --csv_dir id-6-pose-26.csv --video_path static\IMG_0411.mp4 --id_another_csv touch_downs_4114.csv --out_dir st
 atic\ --res 360`
-
-convert the formed video into `mp4` format and then rerun the code again.
